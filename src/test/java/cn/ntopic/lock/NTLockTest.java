@@ -2,14 +2,20 @@
  * Author: obullxl@163.com
  * Copyright (c) 2020-2023 All Rights Reserved.
  */
-package cn.ntopic.sequence;
+package cn.ntopic.lock;
 
-import cn.ntopic.lock.NTLock;
 import cn.ntopic.lock.impl.NTLockImpl;
+import cn.ntopic.lock.model.NTLockDTO;
+import cn.ntopic.lock.model.NTLockResult;
+import cn.ntopic.lock.utils.NTJDBCUtils;
 import com.alibaba.druid.pool.DruidDataSource;
 import org.junit.Assert;
 import org.junit.Test;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -22,9 +28,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class NTLockTest {
 
-    @Test
-    public void test_lock() {
-        // 1. 创建数据源
+    private DruidDataSource makeDataSource() {
         DruidDataSource dataSource = new DruidDataSource();
         dataSource.setUrl("jdbc:sqlite:/Users/obullxl/CodeSpace/lock-jdbc/LockJDBC.sqlite");
         dataSource.setDriverClassName("org.sqlite.JDBC");
@@ -33,7 +37,15 @@ public class NTLockTest {
         dataSource.setTestOnBorrow(true);
         dataSource.setTestOnReturn(false);
         dataSource.setTestWhileIdle(true);
-        dataSource.setValidationQuery("SELECT '1' FROM sqlite_master LIMIT 1");
+        // dataSource.setValidationQuery("SELECT '1' FROM sqlite_master LIMIT 1");
+
+        return dataSource;
+    }
+
+    @Test
+    public void test_lock() {
+        // 1. 创建数据源
+        DruidDataSource dataSource = this.makeDataSource();
 
         final String testName = "TEST-" + System.currentTimeMillis() + "-" + System.nanoTime();
         try {
@@ -50,6 +62,88 @@ public class NTLockTest {
             // 5. 清理测试数据
         } finally {
             dataSource.close();
+        }
+    }
+
+    @Test
+    public void test_release() {
+        // 1. 创建数据源
+        DruidDataSource dataSource = this.makeDataSource();
+
+        final String testName = "TEST-" + System.currentTimeMillis() + "-" + System.nanoTime();
+        try {
+            // 2. 实例化锁服务
+            NTLockImpl ntLock = new NTLockImpl(dataSource);
+            ntLock.createTable();
+            ntLock.init();
+
+            // 3. 排它锁抢占
+            NTLockResult lockResult = ntLock.lock(testName, 10, TimeUnit.SECONDS);
+            Assert.assertTrue(lockResult.isSuccess());
+
+            // 4. 是否排它锁
+            boolean release = ntLock.release(testName);
+            Assert.assertTrue(release);
+
+            // 5. 检测数据记录-不存在
+            Assert.assertFalse(this.checkLockDTO(dataSource, ntLock, lockResult.getLockDTO()));
+        } finally {
+            dataSource.close();
+        }
+    }
+
+    @Test
+    public void test_release_NTLockDTO() {
+        // 1. 创建数据源
+        DruidDataSource dataSource = this.makeDataSource();
+
+        final String testName = "TEST-" + System.currentTimeMillis() + "-" + System.nanoTime();
+        try {
+            // 2. 实例化锁服务
+            NTLockImpl ntLock = new NTLockImpl(dataSource);
+            ntLock.createTable();
+            ntLock.init();
+
+            // 3. 排它锁抢占
+            NTLockResult lockResult = ntLock.lock(testName, 10, TimeUnit.SECONDS);
+            Assert.assertTrue(lockResult.isSuccess());
+
+            // 4. 是否排它锁
+            boolean release = ntLock.release(lockResult.getLockDTO());
+            Assert.assertTrue(release);
+
+            // 5. 检测数据记录-不存在
+            Assert.assertFalse(this.checkLockDTO(dataSource, ntLock, lockResult.getLockDTO()));
+        } finally {
+            dataSource.close();
+        }
+    }
+
+    /**
+     * 查询锁记录
+     */
+    private boolean checkLockDTO(DataSource dataSource, NTLockImpl ntLock, NTLockDTO lockDTO) {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+        try {
+            conn = dataSource.getConnection();
+
+            String selectSQL = String.format("SELECT * FROM %s WHERE pool=? AND name=?", ntLock.getTableName());
+            stmt = conn.prepareStatement(selectSQL);
+
+            stmt.setString(1, lockDTO.getPool());
+            stmt.setString(2, lockDTO.getName());
+
+            rs = stmt.executeQuery();
+            return rs.next();
+        } catch (Throwable e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            NTJDBCUtils.closeQuietly(rs);
+            NTJDBCUtils.closeQuietly(stmt);
+            NTJDBCUtils.closeQuietly(conn);
         }
     }
 

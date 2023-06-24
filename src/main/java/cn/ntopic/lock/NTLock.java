@@ -32,24 +32,56 @@ public interface NTLock {
     int MAX_NAME_LENGTH = 64;
 
     /**
-     * 申请排它锁，或者延长已经抢占的锁
+     * 1. 首次抢占排它锁
+     * 2. 延长已抢占的排他锁
      *
      * @param lockName 排它锁名称，非空，1~64字符
      * @param timeout  锁超时时间，值>0
      * @param timeUnit 超时时间单位
      * @return 锁结果
      * @throws IllegalArgumentException 参数非法
-     * @throws RuntimeException         执行异常
      */
     NTLockResult lock(String lockName, int timeout, TimeUnit timeUnit);
+
+    /**
+     * 1. 首次抢占：包括排它锁，和并发池锁
+     * 2. 延长已抢占的锁：包括排他锁，和并发池锁
+     *
+     * @param lockDTO  锁信息，包括排它锁和并发池锁
+     * @param timeout  锁超时时间，值>0
+     * @param timeUnit 超时时间单位
+     * @return 锁结果
+     * @throws IllegalArgumentException 参数非法
+     */
+    NTLockResult lock(NTLockDTO lockDTO, int timeout, TimeUnit timeUnit);
+
+    /**
+     * 随机抢占锁池并发锁
+     *
+     * @param poolName 并发锁池名称，非空，1~64字符
+     * @param count    并发锁池并发数量，值>0，当=1时，相当于排它锁
+     * @param timeout  锁超时时间，值>0
+     * @param timeUnit 超时时间单位
+     * @return 锁结果
+     * @throws IllegalArgumentException 参数非法
+     */
+    NTLockResult lockPool(String poolName, int count, int timeout, TimeUnit timeUnit);
+
+    /**
+     * 释放排它锁
+     *
+     * @param lockName 排它锁名称，非空，1~64字符
+     * @return 释放结果，true-代表释放成功，false-代表失败或者未知异常
+     * @throws IllegalArgumentException 参数非法
+     */
+    boolean release(String lockName);
 
     /**
      * 释放排它锁，或者释放并发池锁
      *
      * @param lockDTO 申请锁对象
-     * @return 锁结果
+     * @return 释放结果，true-代表释放成功，false-代表失败或者未知异常
      * @throws IllegalArgumentException 参数非法
-     * @throws RuntimeException         执行异常
      */
-    NTLockResult release(NTLockDTO lockDTO);
+    boolean release(NTLockDTO lockDTO);
 }

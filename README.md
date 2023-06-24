@@ -39,21 +39,21 @@
 
 ## 创建数据表（可选）
 + 项目根目录有测试的SQLite数据库（`LockJDBC.sqlite`），可直接用于测试；其他的数据库，可提前创建数据表。
-+ 锁数据表名可自定义（默认为`nt_lock`），但表的7个字段（`group`、`name`、`own_host`、`own_ip`、`expire`、`size`、`times`和`modify`）名称不可修改。
++ 锁数据表名可自定义（默认为`nt_lock`），但表的7个字段（`group`、`name`、`own_host`、`own_ip`、`own_id`、`expire`、`size`、`times`和`modify`）名称不可修改。
 + `可选：`默认情况下，锁组件可尝试创建数据表，若当前用户无建表权限，则需要手工创建以下锁数据表：
 ```sql
 CREATE TABLE nt_lock
 (
-    group    VARCHAR(64) NOT NULL DEFAULT 'DEFAULT' COMMENT '锁分组，针对锁池生效',
+    pool     VARCHAR(64) NOT NULL DEFAULT 'DEFAULT' COMMENT '锁分组，针对锁池生效',
     name     VARCHAR(64) NOT NULL COMMENT '锁名称',
     own_host VARCHAR(64) NOT NULL COMMENT '锁定服务器',
     own_ip   VARCHAR(64) NOT NULL COMMENT '锁定服务器IP',
+    own_id   BIGINT      NOT NULL COMMENT '锁定服务器IP',
     expire   VARCHAR(32) NOT NULL COMMENT '过期时间，格式：yyyy-MM-dd HH:mm:ss.SSS',
     size     INT         NOT NULL DEFAULT 1 COMMENT '锁池大小，排他锁默认为1',
     times    INT         NOT NULL DEFAULT 1 COMMENT '锁定或者延长锁定次数',
     modify   VARCHAR(32) NOT NULL COMMENT '更新时间，格式：yyyy-MM-dd HH:mm:ss.SSS',
-    PRIMARY KEY (group, name),
-    INDEX idx_nt_lock_expire (expire)
+    PRIMARY KEY (pool, name)
 ) COMMENT ='锁数据表'
 ;
 ```
@@ -123,7 +123,7 @@ long newOrderId3 = ntSequence.next("ORDER");
  * Author: obullxl@163.com
  * Copyright (c) 2020-2023 All Rights Reserved.
  */
-package cn.ntopic.sequence;
+package cn.ntopic.lock;
 
 import cn.ntopic.lock.NTSequence;
 import cn.ntopic.lock.impl.NTSequenceImpl;
